@@ -1,7 +1,12 @@
 # Credit Card Fraud Detection in R
+Sambhav Shrestha
 
 
-### Importing the libaries
+
+### 1. Introduction
+In this project, I decide to analyze the credit card transactions data. The data can be found in https://www.kaggle.com/mlg-ulb/creditcardfraud. The goal of this project is to build a model that can detect fraud transactions. I will be using four machine learning models, Logistic Regression, Decision Trees, Random Forest, and XGBoost and compare their accuracy by using sensitivity vs specificty curve,also called Receiver Operating Characteristc (ROC) curve. We begin by importing the necessary libraries and loading data from the dataset.
+
+### 2. Importing the libaries
 ```{r}
 # importing the required libraries
 library(dplyr)      # for data manipulation
@@ -12,7 +17,6 @@ library(data.table) # for converting data frame to table for faster execution
 library(ggplot2)    # for basic plot
 library(corrplot)   # for plotting corelation plot between elements
 library(Rtsne)      # for plotting tsne model
-library(smotefamily)      # for smote sampling
 library(ROSE)       # for rose sampling
 library(pROC)       # for plotting ROC curve
 library(rpart)      # for regression trees
@@ -22,14 +26,16 @@ library(xgboost)    # for xgboost model
 ```
 
 
-### Importing the credit card dataset from Kaggle
+### 3. Importing the credit card dataset 
+we will convert the data frame to data table which performs much faster for analyzing big data.
 ```{r}
 # importing the dataset
 dataset <- setDT(read.csv("data/creditcard.csv"))
 ```
 
 
-### Data Exploartion
+### 4. Data Exploartion
+Let's explore the dataset and see if we can find anything that stands out and preprocess them for building our machine learning model.
 ```{r}
 # exploring the credit card data
 head(dataset)
@@ -41,6 +47,7 @@ table(dataset$Class)
 # view names of colums  of dataset
 names(dataset)
 ```
+By looking at the data, we can see that there are 28 anonymous variables v1 - v28, one time column, one amount column and one label column( 0 for not fraud and 1 for fraud). We will visualize this data into histogram and bar plot to find any connection or relation between variables.
 
 ```{r}
 # view summary of amount and histogram
@@ -56,7 +63,9 @@ sd(dataset$Amount)
 colSums(is.na(dataset))
 ```
 
-### Data visualization
+### 5. Data visualization
+
+Let's first visualize the transactions over time and see if time is an important factor to be considered for this classification.
 ```{r}
 # visualizing the distribution of transcations across time
 dataset %>%
@@ -88,7 +97,7 @@ ggplot(tsne_matrix, aes(x = V1, y = V2)) + geom_point(aes(color = classes)) + th
 ```
 Since, most of the fraud transactions lie near the edge of the blob of data, we can use different models to differentiate fraud transactions.
 
-### Data Preprocessing
+### 6. Data Preprocessing
 
 Since all the anonymous variables are standardized, we also normalize Amount with mean 0.
 ```{r}
@@ -103,7 +112,7 @@ levels(new_data$Class) <- c("Not Fraud", "Fraud")
 ```
 
 
-# Data modeling
+# 7. Data modeling
 ```{r}
 # split the data into training set and test set
 set.seed(101)
@@ -125,7 +134,9 @@ train_data %>% ggplot(aes(x = factor(Class), y = prop.table(stat(count)), fill =
 
 Since the data is heavily unbalanced with 99% of non-fraudulent data, this may result in our model perfoming less accurately and being heavily baised towards non-fraudulent transactions. So, We sample the data using ROSE (Random over sampling examples), Over sampling or Down sampling method, and examine the area under ROC curve at each sampling methods
 
-### Rose Sampling
+### 8. Sampling Techniques
+
+#### Rose Sampling
 ```{r}
 set.seed(9560)
 rose_train_data <- ROSE(Class ~ ., data  = train_data)$data 
@@ -133,7 +144,7 @@ rose_train_data <- ROSE(Class ~ ., data  = train_data)$data
 table(rose_train_data$Class) 
 ```
 
-### Up Sampling
+#### Up Sampling
 ```{r}
 set.seed(90)
 up_train_data <- upSample(x = train_data[, -30],
@@ -142,7 +153,7 @@ table(up_train_data$Class)
 
 ```
 
-### Down Sampling
+#### Down Sampling
 ```{r}
 set.seed(90)
 down_train_data <- downSample(x = train_data[, -30],
@@ -151,10 +162,10 @@ table(down_train_data$Class)
 
 ```
 
-From the experiment, upsampling peformed slightly better than ROSE and Down Sampling. However, we will use Down Sampling to reduce the time for model training and execution.
+From the experiment, upsampling peformed slightly better than ROSE and Down Sampling. However, we will use Down Sampling to reduce the time for model training and execution. Now, we will test each models and see which one classifies the data better using ROC-AUC curve.
 
 
-### Logistic Regression
+### 9. Logistic Regression
 ```{r}
 # fitting the logistic model
 logistic_model <- glm(Class ~ ., down_train_data, family='binomial')
@@ -175,16 +186,16 @@ roc.curve(test_data$Class, logistic_predictions, plotit = TRUE, col = "blue")
 From the logistic regression, we got the area under ROC Curve: 0.964
 
 
-### Decision Tree Model
+### 10. Decision Tree Model
 ```{r}
 decisionTree_model <- rpart(Class ~ . , down_train_data, method = 'class')
 predicted_val <- predict(decisionTree_model, down_train_data, type = 'class')
 probability <- predict(decisionTree_model, down_train_data, type = 'prob')
 rpart.plot(decisionTree_model)
 ```
+From the decision tree model, we can see that v14 is the most important variable that separates fraud and non-fraud transactions.
 
-
-### Random Forest Model
+### 11. Random Forest Model
 ```{r}
 x = down_train_data[, -30]
 y = down_train_data[,30]
@@ -198,10 +209,10 @@ prob <- rf_pred$prob
 roc.curve(test_data$Class, prob[,2], plotit = TRUE, col = 'blue')
 
 ```
-# from the random forest model, we got area under the ROC Curve: 0.962
+From the random forest model, we got area under the ROC Curve: 0.962
 
 
-### XGBoost Model
+### 12. XGBoost Model
 ```{r}
 set.seed(40)
 
@@ -226,10 +237,10 @@ xgb_fit <- xgboost(data = data.matrix(down_train_data[,-30]),
 xgb_pred <- predict(xgb_fit, data.matrix(test_data[,-30]))
 roc.curve(test_data$Class, xgb_pred, plotit = TRUE)
 ```
+From the XGBoost model, we got area under the ROC Curve: 0.968
 
-from the XGBoost model, we got area under the ROC Curve: 0.968
-
-We can also check which variables has signigicant role in fraud detection.
+### 13. Significant Variables
+We can also check which variables has signigicant role in fraud detection. V14 stood out in decision tree model. Let's compare it with XGboost model.
 ```{r}
 names <- dimnames(data.matrix(down_train_data[,-30]))[[2]]
 
@@ -238,15 +249,11 @@ importance_matrix <- xgb.importance(names, model = xgb_fit)
 # Nice graph
 xgb.plot.importance(importance_matrix[1:10,])
 ```
-
-## Conclusion:
-
-From the above plots and models, we can clarify that XGBoost performed better than logistic and Random Forest Model, although the margin was not very high.
+As we can see v14 has siginificant role in distinguishing the fraud and non-fraud transactions.
 
 
-
-
-
+## 14.Conclusion:
+From the above plots and models, we can clarify that XGBoost performed better than logistic and Random Forest Model, although the margin was not very high. We can also fine tune the XGBoost model to make it perform even better. It is really great how models are able to find the distinguishing features between fraud and non-fraud transactions from such a big data. 
 
 
 
